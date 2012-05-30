@@ -13,6 +13,7 @@ using System.Windows.Navigation;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 using WebSocket4Net;
+using Microsoft.Kinect;
 
 namespace sender_csharp
 {
@@ -29,9 +30,22 @@ namespace sender_csharp
         private WebSocket websocket;
         private bool ready = false;
 
+        KinectSensor kinect;
+
         public MainWindow()
         {
             InitializeComponent();
+
+            //Kinectの初期化
+            kinect = KinectSensor.KinectSensors[0];
+
+            //イベントハンドラの登録
+            kinect.SkeletonFrameReady += new EventHandler<SkeletonFrameReadyEventArgs>(handler_SkeletonFrameReady);
+            //骨格トラッキングの有効化
+            kinect.SkeletonStream.Enable();
+
+            kinect.Start();
+
             if (serverURL == "")
             {
                 textBox1.Text = "URL不明！";
@@ -56,15 +70,6 @@ namespace sender_csharp
                 //channelを先頭に付けて送信
                 websocket.Send(channel + ":" + cmd + "," + msg);
             }
-        }
-
-        private void canvas1_MouseMove(object sender, MouseEventArgs e)
-        {
-            //マウスが青い四角領域(canvas1)上で動く度に呼び出されるメソッド
-            double x = e.GetPosition(canvas1).X; //canvas1の左上をゼロとした座標
-            double y = e.GetPosition(canvas1).Y;
-            // カンマで区切ったマウスのxy座標を送信
-            sendMessage("mouse",x + "," + y);
         }
      
         private void websocket_Opened(object sender, EventArgs e)
@@ -153,18 +158,26 @@ namespace sender_csharp
             }
         }
 
-        private void canvas1_MouseDown(object sender, MouseButtonEventArgs e)
-        {
-            double x = e.GetPosition(canvas1).X;
-            double y = e.GetPosition(canvas1).Y;
-            sendMessage("down", x + "," + y);
-        }
-
-        private void canvas1_MouseUp(object sender, MouseButtonEventArgs e)
-        {
-            double x = e.GetPosition(canvas1).X;
-            double y = e.GetPosition(canvas1).Y;
-            sendMessage("up", x + "," + y);
-        }
+            void handler_SkeletonFrameReady(object sender, SkeletonFrameReadyEventArgs e)
+            {
+                SkeletonFrame temp = e.OpenSkeletonFrame();
+                if (temp != null)
+                {
+                        Skeleton[] skeletonData = new Skeleton[temp.SkeletonArrayLength];
+                        temp.CopySkeletonDataTo(skeletonData);
+                         foreach (Skeleton skeleton in skeletonData)
+                        {
+                            if (skeleton.TrackingState == SkeletonTrackingState.Tracked)
+                            {
+                                Joint right = skeleton.Joints[JointType.HandRight];
+                                Console.WriteLine(right.Position.X + "    " + right.Position.Y + "    " + right.Position.Z + "\n");
+                                    if(right.Position.Z < 1)
+                                    {
+                                    sendMessage("mouse", (300 + right.Position.X*300) + "," + (200 + right.Position.Y*-300));
+                                    }
+                            }
+                        }
+                    }
+                }
+            }
     }
-}
