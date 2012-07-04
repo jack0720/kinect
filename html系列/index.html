@@ -1,0 +1,202 @@
+﻿<html>
+<head>
+<script>
+
+//[要変更]ここにWebsocket プロキシサーバのURLをセットします。
+var serverURL = "ws://white.cs.inf.shizuoka.ac.jp:10808/";
+//[要変更]ここにチャンネル文字列（半角英数字・ブラウザ側と同じ文字列）をセットします
+var channel = "aaa";
+
+var balls = [5]; 
+var ballsize = [5];
+var ballB = [5];
+var size=180;
+var ballpointX = [5];
+var ballpointY = [5];
+var k=0;
+var n=5;
+var img1,img2,img3;
+var field = [];
+var score=0;
+var life=5;
+var moveTimer,kickTimer;
+var flag = false;
+
+function miss(){
+	life--;
+	if(life<0){
+		document.getElementById("gameover").style.visibility="visible";
+		document.getElementById("mask").style.visibility="visible";
+		clearInterval(kickTimer);
+		clearInterval(moveTimer);
+		flag=false;
+		for(l=0;l<n;l++)balls[l].style.visibility="hidden";
+	}
+}
+
+
+function move(){
+	// ボール大きくなってく
+	for(j=0;j<n;j++) {
+		ballsize[j] += size*0.05;
+		if(balls[j].style.visibility=="visible")balls[j].style.width=ballsize[j];
+	}
+	// ボール色変わる
+	for(j=0;j<n;j++){
+		if(ballsize[j]>=size*0.8)balls[j].src=img2.src;
+	}
+	// ボールゴール
+	for(j=0;j<n;j++){
+		if(ballsize[j]>=size && balls[j].style.visibility=="visible"){
+			if(!ballB[j])miss();
+			else score+=100;		
+			balls[j].style.visibility="hidden";
+		}
+	}
+	str="Life:";
+	for(l=0;l<life;l++)str+="●";
+	for(m=life;m<10;m++)str+="　";
+	if(life<0)str="もう一度プレイする場合は「はじめ」と言ってください。";
+	document.getElementById('messageBar').innerHTML = str +"\tScore:"+ score;
+}
+
+function kick(){
+	// ボール発生
+	ballpointX[k%n] = parseInt(Math.random()*(1200-size));
+	ballpointY[k%n] = parseInt(Math.random()*(600-size));
+	balls[k%n].style.left=ballpointX[k%n];
+	balls[k%n].style.top=ballpointY[k%n];
+	balls[k%n].src=img1.src;
+	balls[k%n].style.width=size*0.1;
+	ballsize[k%n] = size*0.1;
+	balls[k%n].style.visibility="visible";
+	ballB[k%n] = false;
+	k++;
+}
+
+function init(){
+	document.getElementById("gameover").style.visibility="hidden";
+	document.getElementById("mask").style.visibility="hidden";
+
+	balls[0] = document.getElementById("ball1");
+	balls[1] = document.getElementById("ball2");
+	balls[2] = document.getElementById("ball3");
+	balls[3] = document.getElementById("ball4");
+	balls[4] = document.getElementById("ball5");
+
+	
+	img1 = new Image();
+	img1.src = "./ball.gif";
+	img2 = new Image();
+	img2.src = "./ball2.gif";
+	img3 = new Image();
+	img3.src = "./ball3.gif";
+	
+	score=0;
+	life=5;
+
+	kickTimer=setInterval("kick()",500);
+	moveTimer=setInterval("move()",100);
+	flag=true;
+}
+
+function judge(){
+	for(i=0;i<5;i++){
+		if(ballsize[i] >= size * 0.8) {
+			for(p=0;p<4;p+=2){
+				if(ballpointX[i]-110 <= fields[p] && fields[p] <= ballpointX[i] +ballsize[i]-24 &&
+					ballpointY[i]-190 <= fields[p+1] && fields[p+1] <= ballpointY[i] +ballsize[i]-22)block(i);
+			}
+ 		}
+	}
+}
+
+function block(s) {
+	if(balls[s].src==img2.src){	
+		balls[s].src=img3.src;
+		ballB[s]=true;
+	}
+}
+
+window.onload = function(){
+	handr = document.getElementById("right");
+	handl = document.getElementById("left");
+
+	//init();
+	var X = -1;
+	var Y = -1;
+	if(channel == "" || serverURL == ""){
+		document.getElementById('messageBar').innerHTML = '[ERROR] チャンネルもしくはURLが空です。';
+		return;
+	}
+	
+	var webSocket = new WebSocket(serverURL);
+	webSocket.onopen = function(event){
+		document.getElementById('messageBar').innerHTML = '接続完了';
+		webSocket.send(channel + ':');
+	};
+
+        webSocket.onmessage = function(event){
+		var msg = event.data;
+		if(msg == channel + ";"){
+			document.getElementById('messageBar').innerHTML = '「はじめ」と言ってください';
+		}else if(msg.indexOf(channel + ":") == 0){
+			//メッセージはココで受信
+			//チャンネル削除
+			msg = msg.substring(msg.indexOf(":")+1);
+			
+			//カンマで分けて配列へ
+			fields = msg.split(",");
+			//配列最初の要素はコマンド名なので取り出します。
+			var cmd = fields.shift();
+			//コマンドに応じて処理を切り替えます。
+			switch(cmd){
+				case "hand":
+					//注：サーバから来たデータは文字列として扱われているため、
+					//数値を送った場合使用時はparseInt等で数値化する。
+					handr.style.left=parseInt(fields[0]);
+					handr.style.top=parseInt(fields[1]);
+					handl.style.left=parseInt(fields[2]);
+					handl.style.top=parseInt(fields[3]);
+					judge();
+					break;
+				case "voice":
+					if(!flag)init();
+				}
+		}else{
+			console.log(JSON.stringify(msg));
+		}
+	};
+
+	webSocket.onclose = function(event){
+		document.getElementById('time').innerHTML = 'socket closed';
+	};
+}
+
+</script>
+</head>
+<body style="background:black">
+
+<!-- 背景 -->
+<img src="./back.gif" id="back" width="1200px">
+<img src="./mask.png" id="mask" height="610px" style="position:absolute;top:0;left:0;visibility:hidden">
+<img src="./gameover.gif" id="gameover" style="position:absolute;left:200;top:200;visibility:hidden">
+
+<br>
+<!-- ボール -->
+<img src="./ball.gif" id="ball1" style="position:absolute;visibility:hidden;top:0">
+<img src="./ball.gif" id="ball2" style="position:absolute;visibility:hidden;top:0">
+<img src="./ball.gif" id="ball3" style="position:absolute;visibility:hidden;top:0">
+<img src="./ball.gif" id="ball4" style="position:absolute;visibility:hidden;top:0">
+<img src="./ball.gif" id="ball5" style="position:absolute;visibility:hidden;top:0">
+
+<!-- 手 -->
+<img src="./left.gif" id="left" style="position:absolute;left:325;top:300" width="134px" >
+<img src="./right.gif" id="right" style="position:absolute;left:675;top:300" width="134px">
+
+<!-- メッセージボード -->
+<div style="background:black;color:white;padding:3px;" id="messageBar">test</div>
+
+
+</body>
+</html>
